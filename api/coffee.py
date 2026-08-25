@@ -9,21 +9,6 @@ router = APIRouter()
 # 메뉴
 # =========================================================
 MENU_SECTIONS = {
-    "추천메뉴": [
-        "더치커피",
-        "아메리카노",
-        "카페라떼",
-        "유자민트 릴렉서 티",
-        "ICE 케모리치 릴렉서 티",
-    ],
-    "스무디": [
-        "딸기주스",
-        "바나나주스",
-        "레몬요거트 스무디",
-        "블루베리요거트 스무디",
-        "딸기 요거트 스무디",
-        "딸기 바나나 스무디",
-    ],
     "커피": [
         "에스프레소",
         "아메리카노",
@@ -37,6 +22,14 @@ MENU_SECTIONS = {
         "카페모카",
         "피치프레소",
         "더치커피",
+    ],
+        "스무디": [
+        "딸기주스",
+        "바나나주스",
+        "레몬요거트 스무디",
+        "블루베리요거트 스무디",
+        "딸기 요거트 스무디",
+        "딸기 바나나 스무디",
     ],
     "음료": [
         "그린티 라떼",
@@ -105,6 +98,7 @@ SECTION_STYLE = {
 # =========================================================
 CLEAR_ACTION_VALUE = "clear"
 NO_SELECTION_KEY = "선택안함"
+CLOSE_ACTION_VALUE = "투표종료"
 
 
 # =========================================================
@@ -282,7 +276,10 @@ def section_block_buttons(section: str) -> list[dict]:
 # 같은 버튼 재클릭 시 토글 취소되는 것과 별개로
 # 명시적으로 선택을 지울 수 있는 버튼을 제공한다.
 # =========================================================
-def clear_button_block() -> list[dict]:
+# =========================================================
+# 하단 컨트롤 버튼 (선택안함, 투표 종료, 투표 삭제) 생성
+# =========================================================
+def control_button_block() -> list[dict]:
     return [
         {
             "callbackId": "coffee-poll",
@@ -292,11 +289,19 @@ def clear_button_block() -> list[dict]:
                     "type": "button",
                     "text": f"❌ {NO_SELECTION_KEY}",
                     "value": CLEAR_ACTION_VALUE,
+                },
+                {
+                    "name": "close",
+                    "type": "button",
+                    "text": "🏁 투표 종료",
+                    "value": CLOSE_ACTION_VALUE,
                 }
             ],
             "color": "#9CA3AF",
         }
     ]
+
+
 
 
 # =========================================================
@@ -370,7 +375,7 @@ def create_coffee_poll():
     for section in section_order:
         attachments.extend(section_block_buttons(section))
 
-    attachments.extend(clear_button_block())
+    attachments.extend(control_button_block())
     attachments.append(status_attachment())
 
     return pack(
@@ -519,7 +524,23 @@ def handle_clear_action(data: dict):
 
     return rebuild_poll_message(original, status)
 
+def handle_close_action(data: dict):
+    original = data.get("originalMessage") or {}
+    
+    # 1. 기존 투표 현황 데이터를 읽어옵니다.
+    status = parse_status(original)
+    
+    # 2. 투표 현황 데이터를 화면에 뿌려줄 필드(updated_fields) 형식으로 변환합니다.
+    updated_fields = status_fields(status)
 
+    # 3. 버튼들을 모두 없애고 투표 결과만 남긴 메시지를 반환합니다.
+    return pack({
+        "responseType": "inChannel",
+        "replaceOriginal": True,
+        "text": "🏁 커피 투표가 종료되었습니다! (최종 결과)",
+        "attachments": [status_attachment(updated_fields)]
+    })
+    
 # =========================================================
 # Dooray 커피 투표 단일 URL
 #
@@ -539,6 +560,9 @@ async def coffee_endpoint(req: Request):
     # "선택안함" 버튼 클릭
     if action_value == CLEAR_ACTION_VALUE:
         return handle_clear_action(data=data)
+
+    if action_value == CLOSE_ACTION_VALUE:
+        return handle_close_action(data=data)
 
     # 메뉴 버튼 클릭 (같은 버튼 재클릭 시 내부적으로 토글 취소 처리)
     if action_value.startswith("vote|"):
