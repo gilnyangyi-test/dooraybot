@@ -46,25 +46,8 @@ async def qims_report_command(req: Request):
     yearly_cnt = qims_data.get("yearly_cnt", 0)
 
     # 두레이 메시지로 출력
+    # 두레이 메시지로 간략하게 출력
     return pack({
         "responseType": "inChannel",
-        "text": "📊 **[QIMS] 정적분석 현황 리포트**",
-        "attachments": [
-            {
-                "title": f"최종 동기화 시간: {updated_at}",
-                "color": "#10B981",
-                "fields": [
-                    {
-                        "title": "주간 분석 건수 (최근 7일)",
-                        "value": f"**{weekly_cnt:,}** 건",
-                        "short": False
-                    },
-                    {
-                        "title": "올해 누적 분석 건수",
-                        "value": f"**{yearly_cnt:,}** 건",
-                        "short": False
-                    }
-                ]
-            }
-        ]
+        "text": f"최종 동기화 시간: {updated_at}\n주간 분석 건수 (최근 7일) : {weekly_cnt:,}건\n올해 누적 분석 건수 : {yearly_cnt:,}건"
     })
