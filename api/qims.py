@@ -46,15 +46,12 @@ async def qims_report_command(req: Request):
     yearly_cnt = qims_data.get("yearly_cnt", 0)
 
     # 두레이 메시지로 출력
-# 두레이 메시지로 간략하게 출력 (타이틀 추가 및 특수기호 제거)
-# 두레이 메시지로 간략하게 출력 (볼드체 적용을 위해 심플한 attachment 활용)
-# 두레이 메시지로 간략하게 출력 (타이틀 포함 전체 볼드체 적용)
-    return pack({
+return pack({
         "responseType": "inChannel",
-        "text": "📊 [QIMS] 정적분석 현황 리포트",  # 푸시 알림 미리보기용 텍스트
+        "text": "📊 [QIMS] 정적분석 현황 리포트",
         "attachments": [
             {
-                "text": "**📊 [QIMS] 정적분석 현황 리포트**\n\n**최종 동기화 시간:** {updated_at}\n**주간 분석 건수 (최근 7일) :** {weekly_cnt:,}건\n**올해 누적 분석 건수 :** {yearly_cnt:,}건"
+                "text": f"**최종 동기화 시간:** {updated_at}\n**주간 분석 건수 (최근 7일) :** {weekly_cnt:,}건\n**올해 누적 분석 건수 :** {yearly_cnt:,}건"
             }
         ]
     })
