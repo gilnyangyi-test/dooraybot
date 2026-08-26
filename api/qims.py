@@ -30,9 +30,8 @@ async def qims_report_command(req: Request):
             gist_data = response.json()
             
             # Gist 내의 'qims_data.json' 파일 내용 파싱
-            file_content = gist_data["files"]["qims_data.json"]["content"]
-            import json
-            qims_data = json.loads(file_content)
+        content_str = gist_data["files"]["qims_data.json"]["content"]
+        data = json.loads(content_str)
             
     except Exception as e:
         return pack({
@@ -41,11 +40,12 @@ async def qims_report_command(req: Request):
         })
 
     # 파싱한 데이터 변수 할당
-    updated_at = qims_data.get("updated_at", "알 수 없음")
-    weekly_cnt = qims_data.get("weekly_cnt", 0)
-    yearly_cnt = qims_data.get("yearly_cnt", 0)
-    qmark_weekly_cnt = int(data.get('qmark_weekly_cnt', 0))
-    qmark_yearly_cnt = int(data.get('qmark_yearly_cnt', 0))
+updated_at = data.get('updated_at', '알 수 없음')
+        weekly_cnt = int(data.get('weekly_cnt', 0))
+        yearly_cnt = int(data.get('yearly_cnt', 0))
+        qmark_weekly_cnt = int(data.get('qmark_weekly_cnt', 0))
+        qmark_yearly_cnt = int(data.get('qmark_yearly_cnt', 0))
+
 
     # 두레이 메시지로 출력
 # 두레이 메시지로 간략하게 출력 (타이틀 추가 및 특수기호 제거)
