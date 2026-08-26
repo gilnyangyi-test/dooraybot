@@ -50,38 +50,15 @@ async def qims_report_command(req: Request):
     # 두레이 메시지로 출력
 # 두레이 메시지로 출력 (attachments를 사용하여 왼쪽 글자 볼드체 적용)
 # 두레이 메시지로 출력 (title 값이 자동으로 볼드체 적용되는 fields 형식 활용)
+# 두레이 메시지로 간략하게 출력 (볼드체 포기, 가장 깔끔한 1줄 형태)
     return pack({
         "responseType": "inChannel",
-        "text": "📊 [QIMS] 주간 현황 리포트",
-        "attachments": [
-            {
-                "fields": [
-                    {
-                        "title": "최종 동기화 시간",
-                        "value": updated_at,
-                        "short": False
-                    },
-                    {
-                        "title": "주간 정적분석 건수 (최근 7일)",
-                        "value": f"{weekly_cnt:,}건",
-                        "short": False
-                    },
-                    {
-                        "title": "올해 누적 정적분석 건수",
-                        "value": f"{yearly_cnt:,}건",
-                        "short": False
-                    },
-                    {
-                        "title": "주간 Q-mark 인증 건수 (최근 7일)",
-                        "value": f"{qmark_weekly_cnt:,}건",
-                        "short": False
-                    },
-                    {
-                        "title": "올해 누적 Q-mark 인증 건수",
-                        "value": f"{qmark_yearly_cnt:,}건",
-                        "short": False
-                    }
-                ]
-            }
-        ]
+        "text": (
+            f"📊 [QIMS] 주간 현황 리포트\n\n"
+            f"최종 동기화 시간: {updated_at}\n"
+            f"주간 정적분석 건수 (최근 7일) : {weekly_cnt:,}건\n"
+            f"올해 누적 정적분석 건수 : {yearly_cnt:,}건\n"
+            f"주간 Q-mark 인증 건수 (최근 7일) : {qmark_weekly_cnt:,}건\n"
+            f"올해 누적 Q-mark 인증 건수 : {qmark_yearly_cnt:,}건"
+        )
     })
