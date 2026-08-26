@@ -44,6 +44,8 @@ async def qims_report_command(req: Request):
     updated_at = qims_data.get("updated_at", "알 수 없음")
     weekly_cnt = qims_data.get("weekly_cnt", 0)
     yearly_cnt = qims_data.get("yearly_cnt", 0)
+    qmark_weekly_cnt = int(data.get('qmark_weekly_cnt', 0))
+    qmark_yearly_cnt = int(data.get('qmark_yearly_cnt', 0))
 
     # 두레이 메시지로 출력
 # 두레이 메시지로 간략하게 출력 (타이틀 추가 및 특수기호 제거)
