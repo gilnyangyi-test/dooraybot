@@ -1,4 +1,5 @@
 import os
+import json  # 💡 문제 1 해결: json 모듈 임포트 추가
 import httpx
 from fastapi import APIRouter, Request
 from api.common import pack
@@ -29,7 +30,7 @@ async def qims_report_command(req: Request):
             response.raise_for_status()
             gist_data = response.json()
             
-            # Gist 내의 'qims_data.json' 파일 내용 파싱
+        # Gist 내의 'qims_data.json' 파일 내용 파싱
         content_str = gist_data["files"]["qims_data.json"]["content"]
         data = json.loads(content_str)
             
@@ -39,17 +40,15 @@ async def qims_report_command(req: Request):
             "text": f"⚠️ GitHub에서 QIMS 데이터를 가져오지 못했습니다.\n(상세 오류: {str(e)})"
         })
 
-    # 파싱한 데이터 변수 할당
-updated_at = data.get('updated_at', '알 수 없음')
-        weekly_cnt = int(data.get('weekly_cnt', 0))
-        yearly_cnt = int(data.get('yearly_cnt', 0))
-        qmark_weekly_cnt = int(data.get('qmark_weekly_cnt', 0))
-        qmark_yearly_cnt = int(data.get('qmark_yearly_cnt', 0))
-
+    # 💡 문제 2 해결: 들여쓰기를 함수 내부에 맞게 정확히 정렬
+    updated_at = data.get('updated_at', '알 수 없음')
+    weekly_cnt = int(data.get('weekly_cnt', 0))
+    yearly_cnt = int(data.get('yearly_cnt', 0))
+    qmark_weekly_cnt = int(data.get('qmark_weekly_cnt', 0))
+    qmark_yearly_cnt = int(data.get('qmark_yearly_cnt', 0))
 
     # 두레이 메시지로 출력
-# 두레이 메시지로 간략하게 출력 (타이틀 추가 및 특수기호 제거)
-return pack({
+    return pack({
         "responseType": "inChannel",
         "text": (
             f"📊 [QIMS] 주간 현황 리포트\n\n"
