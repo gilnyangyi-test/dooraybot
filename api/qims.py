@@ -47,7 +47,7 @@ async def qims_report_command(req: Request):
 
     # 두레이 메시지로 출력
 # 두레이 메시지로 간략하게 출력 (타이틀 추가 및 특수기호 제거)
-    return pack({
-        "responseType": "inChannel",
-        "text": f"📊 [QIMS] 정적분석 현황 리포트\n\n최종 동기화 시간: {updated_at}\n주간 분석 건수 (최근 7일) : {weekly_cnt:,}건\n올해 누적 분석 건수 : {yearly_cnt:,}건"
-    })
+    return pack({
+        "responseType": "inChannel",
+        "text": f"📊 [QIMS] 주간 현황 리포트\n\n최종 동기화 시간: {updated_at}\n주간 정적분석 건수 (최근 7일) : {weekly_cnt:,}건\n누적 정적분석 건수 : {yearly_cnt:,}건\n주간 Q-mark인증 건수 (최근 7일) : {qmark_weekly_cnt:,}건\n누적 Q-mark인증 건수 (최근 7일) : {qmark_weekly_cnt:,}건\n"
+    })
