@@ -48,14 +48,20 @@ async def qims_report_command(req: Request):
     qmark_yearly_cnt = int(data.get('qmark_yearly_cnt', 0))
 
     # 두레이 메시지로 출력
+# 두레이 메시지로 출력 (attachments를 사용하여 왼쪽 글자 볼드체 적용)
     return pack({
         "responseType": "inChannel",
-        "text": (
-            f"📊 [QIMS] 주간 현황 리포트\n\n"
-            f"최종 동기화 시간: {updated_at}\n"
-            f"주간 정적분석 건수 (최근 7일) : {weekly_cnt:,}건\n"
-            f"올해 누적 정적분석 건수 : {yearly_cnt:,}건\n"
-            f"주간 Q-mark 인증 건수 (최근 7일) : {qmark_weekly_cnt:,}건\n"
-            f"올해 누적 Q-mark 인증 건수 : {qmark_yearly_cnt:,}건"
-        )
+        "text": "📊 [QIMS] 주간 현황 리포트",  # 푸시 알림 미리보기용 텍스트
+        "attachments": [
+            {
+                "text": (
+                    f"**📊 [QIMS] 주간 현황 리포트**\n\n"
+                    f"**최종 동기화 시간:** {updated_at}\n"
+                    f"**주간 정적분석 건수 (최근 7일) :** {weekly_cnt:,}건\n"
+                    f"**올해 누적 정적분석 건수 :** {yearly_cnt:,}건\n"
+                    f"**주간 Q-mark 인증 건수 (최근 7일) :** {qmark_weekly_cnt:,}건\n"
+                    f"**올해 누적 Q-mark 인증 건수 :** {qmark_yearly_cnt:,}건"
+                )
+            }
+        ]
     })
