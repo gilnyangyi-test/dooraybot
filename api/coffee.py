@@ -104,6 +104,7 @@ SECTION_STYLE = {
 CLEAR_ACTION_VALUE = "clear"
 NO_SELECTION_KEY = "선택안함"
 CLOSE_ACTION_VALUE = "투표종료"
+REOPEN_ACTION_VALUE = "투표수정"
 
 
 # =========================================================
@@ -189,7 +190,7 @@ def status_fields(status: dict) -> list[dict]:
         {
             "title": menu_name,
             "value": "\n".join(voters),
-            "short": False,
+            "short": True,
         }
         for menu_name, voters in status.items()
     ]
@@ -592,14 +593,46 @@ def handle_close_action(data: dict):
     # 2. 투표 현황 데이터를 화면에 뿌려줄 필드(updated_fields) 형식으로 변환합니다.
     updated_fields = status_fields(status)
 
-    # 3. 버튼들을 모두 없애고 투표 결과만 남긴 메시지를 반환합니다.
+    # 3. 최종 결과와 수정 버튼을 표시합니다.
     return pack({
         "responseType": "inChannel",
         "replaceOriginal": True,
         "text": "🏁 커피 투표가 종료되었습니다! (최종 결과)",
-        "attachments": [status_attachment(updated_fields)]
+        "attachments": [
+            status_attachment(updated_fields),
+            {
+                "callbackId": "coffee-poll",
+                "actions": [{
+                    "name": "reopen",
+                    "type": "button",
+                    "text": "✏️ 수정",
+                    "value": REOPEN_ACTION_VALUE,
+                }],
+            },
+        ]
     })
     
+def handle_reopen_action(data: dict):
+    """기존 투표 결과를 유지하면서 공용 투표를 다시 연다."""
+    original = data.get("originalMessage") or {}
+    if not any(
+        action.get("value") == REOPEN_ACTION_VALUE
+        for attachment in original.get("attachments") or []
+        for action in attachment.get("actions") or []
+    ):
+        return pack({})
+    status = parse_status(original)
+    attachments = category_attachments()
+    attachments.extend(control_button_block())
+    attachments.append(status_attachment(status_fields(status)))
+    return pack({
+        "responseType": "inChannel",
+        "replaceOriginal": True,
+        "text": "☕ 커피 투표 수정 중입니다. 카테고리를 펼쳐 선택을 변경해주세요.",
+        "attachments": attachments,
+    })
+
+
 # =========================================================
 # Dooray 커피 투표 단일 URL
 #
@@ -622,6 +655,9 @@ async def coffee_endpoint(req: Request):
     # "선택안함" 버튼 클릭
     if action_value == CLEAR_ACTION_VALUE:
         return handle_clear_action(data=data)
+
+    if action_value == REOPEN_ACTION_VALUE:
+        return handle_reopen_action(data=data)
 
     if action_value == CLOSE_ACTION_VALUE:
         return handle_close_action(data=data)
