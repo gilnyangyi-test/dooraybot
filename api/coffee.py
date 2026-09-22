@@ -189,7 +189,7 @@ def status_fields(status: dict) -> list[dict]:
         {
             "title": menu_name,
             "value": "\n".join(voters),
-            "short": False,
+            "short": True,
         }
         for menu_name, voters in status.items()
     ]
