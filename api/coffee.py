@@ -1,8 +1,3 @@
-# 카테고리 접기/펼치기 버전
-# 기존 coffee 라우터 파일을 이 파일로 교체하세요. api.common.pack은 기존 것을 사용합니다.
-# inChannel + replaceOriginal 방식이므로 펼침 상태는 채팅방 참여자에게 공유됩니다.
-# 기존과 같이 originalMessage에 상태를 저장하므로 동시 클릭 시 갱신 충돌 가능성이 있습니다.
-
 from fastapi import APIRouter, Request
 
 from api.common import pack
@@ -373,79 +368,25 @@ def rebuild_poll_message(original: dict, status: dict):
 # =========================================================
 # 최초 커피 투표 메시지 생성
 # =========================================================
-def category_attachments(open_sections=None):
-    """버튼의 다음 동작 값으로 펼침 상태를 보존한다."""
-    open_sections = set(open_sections or [])
-    attachments = []
-    for section in MENU_SECTIONS:
-        expanded = section in open_sections
-        style = SECTION_STYLE.get(section, {"emoji": "•", "color": "#4757C4"})
-        attachments.append({
-            "callbackId": "coffee-poll",
-            "color": style["color"],
-            "actions": [{
-                "name": "toggle-category",
-                "type": "button",
-                "text": f"{'▼' if expanded else '▶'} {style['emoji']} {section} ({'접기' if expanded else '펼치기'})",
-                "value": f"category|{section}|{'close' if expanded else 'open'}",
-            }],
-        })
-        if expanded:
-            # 기존 함수의 제목 블록은 생략하고 메뉴 버튼 블록만 사용
-            attachments.extend(section_block_buttons(section)[1:])
-    return attachments
-
-
-def get_open_sections(original):
-    opened = set()
-    for attachment in original.get("attachments") or []:
-        for action in attachment.get("actions") or []:
-            parts = str(action.get("value") or "").split("|", 2)
-            if len(parts) == 3 and parts[0] == "category" and parts[2] == "close":
-                if parts[1] in MENU_SECTIONS:
-                    opened.add(parts[1])
-    return opened
-
-
-def handle_category_action(data, action_value):
-    original = data.get("originalMessage") or {}
-    parts = action_value.split("|", 2)
-    if len(parts) != 3 or parts[1] not in MENU_SECTIONS or parts[2] not in {"open", "close"}:
-        return pack({})
-    # 종료된 메시지 또는 다른 메시지에는 카테고리 동작을 적용하지 않는다.
-    available = {
-        action.get("value")
-        for attachment in original.get("attachments") or []
-        for action in attachment.get("actions") or []
-    }
-    if action_value not in available:
-        return pack({})
-    opened = get_open_sections(original)
-    if parts[2] == "open":
-        opened.add(parts[1])
-    else:
-        opened.discard(parts[1])
-    attachments = category_attachments(opened)
-    attachments.extend(control_button_block())
-    attachments.append(status_attachment(status_fields(parse_status(original))))
-    return pack({
-        "responseType": "inChannel",
-        "replaceOriginal": True,
-        "text": original.get("text") or "☕ 커피 투표를 시작합니다!",
-        "attachments": attachments,
-    })
-
-
 def create_coffee_poll():
-    attachments = category_attachments()
+    attachments = []
+
+    section_order = list(MENU_SECTIONS.keys())
+
+    for section in section_order:
+        attachments.extend(section_block_buttons(section))
+
     attachments.extend(control_button_block())
     attachments.append(status_attachment())
-    return pack({
-        "responseType": "inChannel",
-        "replaceOriginal": False,
-        "text": "☕ 커피 투표를 시작합니다! 카테고리를 눌러 메뉴를 펼쳐주세요.",
-        "attachments": attachments,
-    })
+
+    return pack(
+        {
+            "responseType": "inChannel",
+            "replaceOriginal": False,
+            "text": "☕ 커피 투표를 시작합니다!",
+            "attachments": attachments,
+        }
+    )
 
 
 # =========================================================
@@ -622,13 +563,15 @@ def handle_reopen_action(data: dict):
     ):
         return pack({})
     status = parse_status(original)
-    attachments = category_attachments()
+    attachments = []
+    for section in MENU_SECTIONS:
+        attachments.extend(section_block_buttons(section))
     attachments.extend(control_button_block())
     attachments.append(status_attachment(status_fields(status)))
     return pack({
         "responseType": "inChannel",
         "replaceOriginal": True,
-        "text": "☕ 커피 투표 수정 중입니다. 카테고리를 펼쳐 선택을 변경해주세요.",
+        "text": "☕ 커피 투표 수정 중입니다. 메뉴를 눌러 선택을 변경해주세요.",
         "attachments": attachments,
     })
 
@@ -648,9 +591,6 @@ async def coffee_endpoint(req: Request):
     print("[COFFEE REQUEST]", data)
 
     action_value = get_action_value(data)
-
-    if action_value.startswith("category|"):
-        return handle_category_action(data, action_value)
 
     # "선택안함" 버튼 클릭
     if action_value == CLEAR_ACTION_VALUE:
