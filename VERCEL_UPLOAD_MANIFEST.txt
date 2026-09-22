@@ -1,0 +1,23 @@
+Vercel/GitHub 반영 대상
+=======================
+
+[신규]
+api/meeting.py
+.env.example
+MEETING_BOT_SETUP.md
+
+[수정]
+api/index.py
+
+[Vercel 환경변수]
+GITHUB_TOKEN
+GIST_ID
+GITHUB_REPO
+DOORAY_APP_TOKEN
+
+[배포 제외 - 개인 PC 전용]
+.env.local
+.env.worker
+worker/meeting_worker.py
+run_meeting_worker.bat
+.env.worker.example
