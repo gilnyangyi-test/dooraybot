@@ -370,7 +370,10 @@ def rebuild_poll_message(original: dict, status: dict):
 def create_coffee_poll():
     attachments = [
         {
-            "text": "-" * 100,
+            "text": (
+                "https://qims.etri.re.kr/zabbix/tr_events.php"
+                "?triggerid=37239&eventid=756083"
+            ),
         }
     ]
 
