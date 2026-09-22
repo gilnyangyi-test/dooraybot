@@ -261,6 +261,7 @@ def section_block_buttons(section: str) -> list[dict]:
     blocks.append(
         {
             "callbackId": "coffee-poll",
+            "text": "원하시는 음료의 온도를 선택해 주세요.원하시는 음료의 온도를 선택해 주세요.",
             "actions": actions,
             "color": style["color"],
         }
