@@ -1,4 +1,4 @@
-"""Dooray /meeting 요청을 GitHub Issue 기반 개인 PC 작업 큐에 등록한다."""
+"""Dooray /ai 요청을 GitHub Issue 기반 개인 PC 작업 큐에 등록한다."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def github_headers(token: str) -> dict[str, str]:
 
 def normalize_query(value: str) -> str:
     value = value.strip()
-    value = re.sub(r"^/(?:meeting|ai)(?:\s+|$)", "", value, flags=re.IGNORECASE).strip()
+    value = re.sub(r"^/ai(?:\s+|$)", "", value, flags=re.IGNORECASE).strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
         value = value[1:-1].strip()
     return value
@@ -125,7 +125,7 @@ async def enqueue_job(
     return issue_number
 
 
-@router.post("/dooray/meeting")
+@router.post("/dooray/ai")
 async def meeting_command(req: Request):
     github_token = os.environ.get("GITHUB_TOKEN", "")
     gist_id = os.environ.get("MEETING_GIST_ID", "")
@@ -149,7 +149,7 @@ async def meeting_command(req: Request):
     if not query:
         return pack({
             "responseType": "ephemeral",
-            "text": '사용법: /meeting "10월 1일 예약 현황을 알려줘"',
+            "text": '사용법: /ai "10월 1일 예약 현황을 알려줘"',
         })
     if contains_mutation_request(query):
         return pack({
