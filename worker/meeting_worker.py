@@ -20,6 +20,11 @@ JOB_FILE = "meeting_jobs.json"
 ISSUE_PREFIX = "[meeting-job]"
 
 
+for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+        stream.reconfigure(encoding="utf-8")
+
+
 def load_env(path: Path) -> None:
     if not path.is_file():
         return

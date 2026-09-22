@@ -3,3 +3,4 @@
 .env.worker
 __pycache__/
 *.pyc
+meeting-worker*.log
