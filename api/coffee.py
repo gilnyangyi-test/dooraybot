@@ -368,14 +368,7 @@ def rebuild_poll_message(original: dict, status: dict):
 # 최초 커피 투표 메시지 생성
 # =========================================================
 def create_coffee_poll():
-    attachments = [
-        {
-            "text": (
-                "https://qims.etri.re.kr/zabbix/tr_events.php"
-                "?triggerid=37239&eventid=756083"
-            ),
-        }
-    ]
+    attachments = []
 
     section_order = list(MENU_SECTIONS.keys())
 
