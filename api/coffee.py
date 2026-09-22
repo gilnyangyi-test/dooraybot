@@ -368,7 +368,11 @@ def rebuild_poll_message(original: dict, status: dict):
 # 최초 커피 투표 메시지 생성
 # =========================================================
 def create_coffee_poll():
-    attachments = []
+    attachments = [
+        {
+            "text": "-" * 100,
+        }
+    ]
 
     section_order = list(MENU_SECTIONS.keys())
 
