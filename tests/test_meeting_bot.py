@@ -19,7 +19,7 @@ class MeetingApiTests(unittest.IsolatedAsyncioTestCase):
             os.environ,
             {
                 "GITHUB_TOKEN": "test-token",
-                "GIST_ID": "test-gist",
+                "MEETING_GIST_ID": "test-meeting-gist",
                 "GITHUB_REPO": "owner/repo",
                 "DOORAY_APP_TOKEN": "dooray-secret",
             },
@@ -40,7 +40,7 @@ class MeetingApiTests(unittest.IsolatedAsyncioTestCase):
                 "/dooray/meeting",
                 json={
                     "appToken": "dooray-secret",
-                    "text": '/ai "10월 1일 예약 현황을 알려줘"',
+                    "text": '/meeting "10월 1일 예약 현황을 알려줘"',
                     "responseUrl": "https://dooray.example/hook/id",
                     "triggerId": "trigger-1",
                     "userId": "user-1",
@@ -75,6 +75,10 @@ class MeetingApiTests(unittest.IsolatedAsyncioTestCase):
 
 class HelperTests(unittest.TestCase):
     def test_normalize_query(self):
+        self.assertEqual(
+            normalize_query('/meeting "10월 1일 예약 현황을 알려줘"'),
+            "10월 1일 예약 현황을 알려줘",
+        )
         self.assertEqual(
             normalize_query('/ai "10월 1일 예약 현황을 알려줘"'),
             "10월 1일 예약 현황을 알려줘",

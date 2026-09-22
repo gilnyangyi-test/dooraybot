@@ -1,9 +1,9 @@
-# Dooray `/ai` 회의실 조회 봇
+# Dooray `/meeting` 회의실 조회 봇
 
 ## 동작 구조
 
-1. Dooray `/ai`가 `POST /dooray/meeting`을 호출합니다.
-2. Vercel은 실제 요청을 비공개 Gist의 `meeting_jobs.json`에 저장합니다.
+1. Dooray `/meeting`이 `POST /dooray/meeting`을 호출합니다.
+2. Vercel은 실제 요청을 `/meeting` 전용 비공개 Gist의 `meeting_jobs.json`에 저장합니다.
 3. 공개 GitHub 저장소의 Issue에는 무작위 작업 ID만 등록합니다.
 4. 개인 PC의 `worker/meeting_worker.py`가 Issue를 감지합니다.
 5. 작업자가 개인 PC의 회의실 API를 호출하고 `responseUrl`로 결과를 보냅니다.
@@ -15,10 +15,11 @@
 
 Vercel 프로젝트 Settings → Environment Variables에 다음 값을 설정합니다.
 
-- `GITHUB_TOKEN`: Gist 수정 및 Issue 생성 권한이 있는 GitHub 토큰
-- `GIST_ID`: 작업 정보를 저장할 비공개 Gist ID
-- `GITHUB_REPO`: `owner/repository` 형식의 Issue 저장소
-- `DOORAY_APP_TOKEN`: Dooray 슬래시 커맨드 설정에 표시되는 App Token
+- `GITHUB_TOKEN`: GitHub API를 사용할 권한 증명. 저장소 주소 자체는 포함하지 않습니다.
+- `GIST_ID`: 기존 `/qims` 데이터용 비공개 Gist ID
+- `MEETING_GIST_ID`: `/meeting` 요청·콜백 정보를 저장할 별도 비공개 Gist ID
+- `GITHUB_REPO`: Issue를 만들 저장소. 생략하면 `gilnyangyi-test/dooraybot`을 사용합니다.
+- `DOORAY_APP_TOKEN`: 요청이 등록된 Dooray 슬래시 커맨드에서 왔는지 검증하는 비밀키
 
 환경변수 변경 뒤에는 새로 배포해야 합니다.
 
@@ -33,14 +34,14 @@ Vercel 프로젝트 Settings → Environment Variables에 다음 값을 설정�
 
 ## Dooray 슬래시 커맨드
 
-- Command: `/ai`
+- Command: `/meeting`
 - Request URL: `https://dooraybot.vercel.app/dooray/meeting`
 - Method: `POST`
 
 예시:
 
 ```text
-/ai "10월 1일 예약 현황을 알려줘"
+/meeting "10월 1일 예약 현황을 알려줘"
 ```
 
 예약 신청·취소 요청은 Vercel 단계에서 거부합니다.
@@ -71,4 +72,5 @@ python worker/meeting_worker.py --once --dry-run
 - 공개 Issue에는 질문, 사용자 정보, Dooray `responseUrl`을 기록하지 않습니다.
 - GitHub 토큰이 노출되면 즉시 폐기하고 새로 발급합니다.
 - 공개 저장소의 임의 Issue는 비공개 Gist에 동일한 작업 ID가 없으면 실행하지 않습니다.
-- Dooray 요청은 `DOORAY_APP_TOKEN`이 일치할 때만 접수합니다.
+- `/qims`와 `/meeting`은 서로 다른 Gist를 사용합니다.
+- Dooray 요청은 `DOORAY_APP_TOKEN`이 일치할 때만 접수해 공개 API의 임의 호출을 막습니다.

@@ -1,4 +1,4 @@
-"""Dooray /ai 요청을 GitHub Issue 기반 개인 PC 작업 큐에 등록한다."""
+"""Dooray /meeting 요청을 GitHub Issue 기반 개인 PC 작업 큐에 등록한다."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ GITHUB_API = "https://api.github.com"
 JOB_FILE = "meeting_jobs.json"
 ISSUE_PREFIX = "[meeting-job]"
 JOB_TTL_HOURS = 24
+DEFAULT_GITHUB_REPO = "gilnyangyi-test/dooraybot"
 
 
 def github_headers(token: str) -> dict[str, str]:
@@ -33,7 +34,7 @@ def github_headers(token: str) -> dict[str, str]:
 
 def normalize_query(value: str) -> str:
     value = value.strip()
-    value = re.sub(r"^/ai(?:\s+|$)", "", value, flags=re.IGNORECASE).strip()
+    value = re.sub(r"^/(?:meeting|ai)(?:\s+|$)", "", value, flags=re.IGNORECASE).strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
         value = value[1:-1].strip()
     return value
@@ -127,8 +128,8 @@ async def enqueue_job(
 @router.post("/dooray/meeting")
 async def meeting_command(req: Request):
     github_token = os.environ.get("GITHUB_TOKEN", "")
-    gist_id = os.environ.get("GIST_ID", "")
-    repo = os.environ.get("GITHUB_REPO", "")
+    gist_id = os.environ.get("MEETING_GIST_ID", "")
+    repo = os.environ.get("GITHUB_REPO", DEFAULT_GITHUB_REPO)
     expected_app_token = os.environ.get("DOORAY_APP_TOKEN", "")
     if not all((github_token, gist_id, repo, expected_app_token)):
         return pack({
@@ -148,7 +149,7 @@ async def meeting_command(req: Request):
     if not query:
         return pack({
             "responseType": "ephemeral",
-            "text": '사용법: /ai "10월 1일 예약 현황을 알려줘"',
+            "text": '사용법: /meeting "10월 1일 예약 현황을 알려줘"',
         })
     if contains_mutation_request(query):
         return pack({

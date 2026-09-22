@@ -11,8 +11,9 @@ api/index.py
 
 [Vercel 환경변수]
 GITHUB_TOKEN
-GIST_ID
-GITHUB_REPO
+GIST_ID (기존 /qims용)
+MEETING_GIST_ID (신규 /meeting용)
+GITHUB_REPO (선택, 기본값 gilnyangyi-test/dooraybot)
 DOORAY_APP_TOKEN
 
 [배포 제외 - 개인 PC 전용]

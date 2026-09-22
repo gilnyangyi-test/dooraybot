@@ -18,6 +18,7 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 GITHUB_API = "https://api.github.com"
 JOB_FILE = "meeting_jobs.json"
 ISSUE_PREFIX = "[meeting-job]"
+DEFAULT_GITHUB_REPO = "gilnyangyi-test/dooraybot"
 
 
 for stream in (sys.stdout, sys.stderr):
@@ -49,8 +50,8 @@ def required_env(name: str) -> str:
 class GitHubQueue:
     def __init__(self) -> None:
         self.token = required_env("GITHUB_TOKEN")
-        self.gist_id = required_env("GIST_ID")
-        self.repo = required_env("GITHUB_REPO")
+        self.gist_id = required_env("MEETING_GIST_ID")
+        self.repo = os.environ.get("GITHUB_REPO", DEFAULT_GITHUB_REPO).strip()
         self.headers = {
             "Authorization": f"Bearer {self.token}",
             "Accept": "application/vnd.github+json",
