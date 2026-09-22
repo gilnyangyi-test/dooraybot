@@ -143,7 +143,10 @@ def parse_status(original: dict) -> dict:
             key = (field.get("title") or "").strip()
             raw_value = (field.get("value") or "").strip()
 
-            if not key or key == "아직 투표 없음":
+            if not key:
+                continue
+
+            if key == "아직 투표 없음":
                 continue
 
             voters = [
@@ -175,7 +178,7 @@ def status_fields(status: dict) -> list[dict]:
         {
             "title": menu_name,
             "value": "\n".join(voters),
-            "short": True,
+            "short": False,
         }
         for menu_name, voters in status.items()
     ]
@@ -210,17 +213,8 @@ def section_block_buttons(section: str) -> list[dict]:
         },
     )
 
-    # 1. 카테고리 헤더 블록
-    blocks = [
-        {
-            "callbackId": "coffee-poll",
-            "title": f"{style['emoji']}  {section}",
-            "color": style["color"],
-        }
-    ]
-
-    # 2. 메뉴별 전체 액션 버튼 수집
     all_actions = []
+
     for menu in MENU_SECTIONS[section]:
         # ICE 버튼
         all_actions.append(
@@ -250,17 +244,23 @@ def section_block_buttons(section: str) -> list[dict]:
                 }
             )
 
-    # 3. 버튼을 5개씩 나누어 Attachment 블록 생성
+    # 5개씩 슬라이스하여 개별 Attachment 블록 생성
     chunk_size = 5
+    blocks = []
+
     for i in range(0, len(all_actions), chunk_size):
         chunk = all_actions[i : i + chunk_size]
-        blocks.append(
-            {
-                "callbackId": "coffee-poll",
-                "actions": chunk,
-                "color": style["color"],
-            }
-        )
+        block = {
+            "callbackId": "coffee-poll",
+            "actions": chunk,
+            "color": style["color"],
+        }
+
+        # 첫 번째 블록에만 섹션 제목 표시
+        if i == 0:
+            block["title"] = f"{style['emoji']}  {section}"
+
+        blocks.append(block)
 
     return blocks
 
@@ -292,12 +292,15 @@ def control_button_block() -> list[dict]:
 
 
 # =========================================================
-# 사용자의 기존 선택을 모두 제거한 status 반환
+# 사용자의 기존 선택을 모두 제거한 status를 반환
 # =========================================================
 def remove_user_votes(status: dict, user_tag: str) -> dict:
     for current_key in list(status.keys()):
         voters = status.get(current_key) or []
-        remaining_voters = [voter for voter in voters if voter != user_tag]
+
+        remaining_voters = [
+            voter for voter in voters if voter != user_tag
+        ]
 
         if remaining_voters:
             status[current_key] = remaining_voters
@@ -312,6 +315,7 @@ def remove_user_votes(status: dict, user_tag: str) -> dict:
 # =========================================================
 def rebuild_poll_message(original: dict, status: dict):
     updated_fields = status_fields(status)
+
     new_attachments = []
     status_replaced = False
 
@@ -329,7 +333,10 @@ def rebuild_poll_message(original: dict, status: dict):
         {
             "responseType": "inChannel",
             "replaceOriginal": True,
-            "text": original.get("text") or "☕ 커피 투표를 시작합니다!",
+            "text": (
+                original.get("text")
+                or "☕ 커피 투표를 시작합니다!"
+            ),
             "attachments": new_attachments,
         }
     )
@@ -340,6 +347,7 @@ def rebuild_poll_message(original: dict, status: dict):
 # =========================================================
 def create_coffee_poll():
     attachments = []
+
     section_order = list(MENU_SECTIONS.keys())
 
     for section in section_order:
@@ -361,7 +369,10 @@ def create_coffee_poll():
 # =========================================================
 # 버튼 클릭 처리 (메뉴 선택)
 # =========================================================
-def handle_coffee_action(data: dict, action_value: str):
+def handle_coffee_action(
+    data: dict,
+    action_value: str,
+):
     original = data.get("originalMessage") or {}
     user = data.get("user") or {}
     tenant = data.get("tenant") or {}
@@ -370,23 +381,51 @@ def handle_coffee_action(data: dict, action_value: str):
     tenant_id = str(tenant.get("id") or "tenant")
 
     parts = action_value.split("|", 3)
+
     if len(parts) != 4:
+        print("[INVALID ACTION VALUE]", action_value)
         return pack({})
 
     _, section, menu, temperature = parts
     selected_key = f"{menu} ({temperature})"
 
     status = parse_status(original)
-    user_tag = mention_member(tenant_id=tenant_id, user_id=user_id)
+
+    user_tag = mention_member(
+        tenant_id=tenant_id,
+        user_id=user_id,
+    )
+
     already_selected = user_tag in (status.get(selected_key) or [])
 
-    # 기존 선택 초기화
     status = remove_user_votes(status, user_tag)
 
-    if not already_selected:
+    if already_selected:
+        print(
+            "[COFFEE VOTE TOGGLE OFF]",
+            {
+                "section": section,
+                "menu": menu,
+                "temperature": temperature,
+                "user_id": user_id,
+            },
+        )
+    else:
         status.setdefault(selected_key, [])
+
         if user_tag not in status[selected_key]:
             status[selected_key].append(user_tag)
+
+        print(
+            "[COFFEE VOTE]",
+            {
+                "section": section,
+                "menu": menu,
+                "temperature": temperature,
+                "user_id": user_id,
+                "status": status,
+            },
+        )
 
     return rebuild_poll_message(original, status)
 
@@ -403,15 +442,36 @@ def handle_clear_action(data: dict):
     tenant_id = str(tenant.get("id") or "tenant")
 
     status = parse_status(original)
-    user_tag = mention_member(tenant_id=tenant_id, user_id=user_id)
-    already_no_selection = user_tag in (status.get(NO_SELECTION_KEY) or [])
+
+    user_tag = mention_member(
+        tenant_id=tenant_id,
+        user_id=user_id,
+    )
+
+    already_no_selection = user_tag in (
+        status.get(NO_SELECTION_KEY) or []
+    )
 
     status = remove_user_votes(status, user_tag)
 
-    if not already_no_selection:
+    if already_no_selection:
+        print(
+            "[COFFEE VOTE NO-SELECTION TOGGLE OFF]",
+            {"user_id": user_id},
+        )
+    else:
         status.setdefault(NO_SELECTION_KEY, [])
+
         if user_tag not in status[NO_SELECTION_KEY]:
             status[NO_SELECTION_KEY].append(user_tag)
+
+        print(
+            "[COFFEE VOTE NO-SELECTION]",
+            {
+                "user_id": user_id,
+                "status": status,
+            },
+        )
 
     return rebuild_poll_message(original, status)
 
@@ -421,6 +481,7 @@ def handle_clear_action(data: dict):
 # =========================================================
 def handle_close_action(data: dict):
     original = data.get("originalMessage") or {}
+
     status = parse_status(original)
     updated_fields = status_fields(status)
 
@@ -435,12 +496,14 @@ def handle_close_action(data: dict):
 
 
 # =========================================================
-# Dooray 엔드포인트
+# Dooray 라우터 엔드포인트
 # =========================================================
 @router.post("/dooray/coffee")
 @router.post("/dooray/command")
 async def coffee_endpoint(req: Request):
     data = await req.json()
+    print("[COFFEE REQUEST]", data)
+
     action_value = get_action_value(data)
 
     if action_value == CLEAR_ACTION_VALUE:
@@ -450,6 +513,9 @@ async def coffee_endpoint(req: Request):
         return handle_close_action(data=data)
 
     if action_value.startswith("vote|"):
-        return handle_coffee_action(data=data, action_value=action_value)
+        return handle_coffee_action(
+            data=data,
+            action_value=action_value,
+        )
 
     return create_coffee_poll()
