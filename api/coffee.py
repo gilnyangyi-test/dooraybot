@@ -335,22 +335,12 @@ def remove_user_votes(status: dict, user_tag: str) -> dict:
 def rebuild_poll_message(original: dict, status: dict):
     updated_fields = status_fields(status)
 
-    new_attachments = []
-    status_replaced = False
-
-    for attachment in original.get("attachments") or []:
-        if attachment.get("title") == "선택 현황":
-            new_attachments.append(
-                status_attachment(updated_fields)
-            )
-            status_replaced = True
-        else:
-            new_attachments.append(attachment)
-
-    if not status_replaced:
-        new_attachments.append(
-            status_attachment(updated_fields)
-        )
+    new_attachments = [status_attachment(updated_fields)]
+    new_attachments.extend(
+        attachment
+        for attachment in original.get("attachments") or []
+        if attachment.get("title") != "선택 현황"
+    )
 
     return pack(
         {
@@ -369,7 +359,7 @@ def rebuild_poll_message(original: dict, status: dict):
 # 최초 커피 투표 메시지 생성
 # =========================================================
 def create_coffee_poll():
-    attachments = []
+    attachments = [status_attachment()]
 
     section_order = list(MENU_SECTIONS.keys())
 
@@ -377,7 +367,6 @@ def create_coffee_poll():
         attachments.extend(section_block_buttons(section))
 
     attachments.extend(control_button_block())
-    attachments.append(status_attachment())
 
     return pack(
         {
@@ -563,11 +552,10 @@ def handle_reopen_action(data: dict):
     ):
         return pack({})
     status = parse_status(original)
-    attachments = []
+    attachments = [status_attachment(status_fields(status))]
     for section in MENU_SECTIONS:
         attachments.extend(section_block_buttons(section))
     attachments.extend(control_button_block())
-    attachments.append(status_attachment(status_fields(status)))
     return pack({
         "responseType": "inChannel",
         "replaceOriginal": True,
