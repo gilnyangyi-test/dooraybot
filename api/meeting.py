@@ -195,6 +195,6 @@ async def meeting_command(req: Request):
         })
 
     return pack({
-        "responseType": "ephemeral",
-        "text": f"🔎 회의실 정보를 조회 중입니다. 완료되면 이 대화방에 결과를 보내겠습니다. (작업 #{issue_number})",
+        "responseType": "inChannel",
+        "text": f"🔎 회의실 정보를 조회 중입니다. 완료되면 이 메시지를 결과로 바꾸겠습니다. (작업 #{issue_number})",
     })
