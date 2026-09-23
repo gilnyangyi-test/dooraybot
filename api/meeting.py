@@ -197,5 +197,5 @@ async def meeting_command(req: Request):
 
     return pack({
         "responseType": "inChannel",
-        "text": "회의실 정보를 조회 중입니다. (약 1분 소요)",
+        "text": f'회의실 정보를 조회 중입니다. (약 1분 소요)\n질의 : "{query}"',
     })
