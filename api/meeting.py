@@ -115,11 +115,20 @@ async def enqueue_job(
     issue_response.raise_for_status()
     issue_number = int(issue_response.json()["number"])
 
-    document["jobs"][job["job_id"]]["issue_number"] = issue_number
+    # 작업자가 첫 Gist PATCH 직후 처리를 시작할 수 있으므로 최신 문서를 다시 읽어
+    # issue_number만 병합한다. 오래된 document로 작업 결과를 덮어쓰지 않는다.
+    latest_response = await client.get(gist_url, headers=headers)
+    latest_response.raise_for_status()
+    latest_document = read_jobs(latest_response.json())
+    latest_job = latest_document["jobs"].get(job["job_id"])
+    if latest_job is None:
+        latest_job = dict(job)
+        latest_document["jobs"][job["job_id"]] = latest_job
+    latest_job["issue_number"] = issue_number
     update_response = await client.patch(
         gist_url,
         headers=headers,
-        json={"files": {JOB_FILE: {"content": json.dumps(document, ensure_ascii=False, indent=2)}}},
+        json={"files": {JOB_FILE: {"content": json.dumps(latest_document, ensure_ascii=False, indent=2)}}},
     )
     update_response.raise_for_status()
     return issue_number
