@@ -96,7 +96,8 @@ async def enqueue_job(
             if existing.get("trigger_id") == trigger_id:
                 return int(existing.get("issue_number") or 0)
 
-    document["jobs"][job["job_id"]] = job
+    # 새 요청마다 이전 회의실 작업 기록을 비우고 현재 작업 한 건만 저장한다.
+    document = {"version": 1, "jobs": {job["job_id"]: job}}
     update_response = await client.patch(
         gist_url,
         headers=headers,
@@ -196,5 +197,5 @@ async def meeting_command(req: Request):
 
     return pack({
         "responseType": "inChannel",
-        "text": f'회의실 정보를 조회 중입니다.\n질의 : "{query}"',
+        "text": "회의실 정보를 조회 중입니다. (약 1분 소요)",
     })
