@@ -7,7 +7,7 @@ import json
 import os
 import re
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -18,9 +18,8 @@ from api.common import pack
 
 router = APIRouter()
 GITHUB_API = "https://api.github.com"
-JOB_FILE = "meeting_jobs.json"
+JOB_FILE_PREFIX = "meeting_job_"
 ISSUE_PREFIX = "[meeting-job]"
-JOB_TTL_HOURS = 24
 DEFAULT_GITHUB_REPO = "gilnyangyi-test/dooraybot"
 
 
@@ -49,99 +48,54 @@ def contains_mutation_request(query: str) -> bool:
     )
 
 
-def read_jobs(gist_data: dict[str, Any]) -> dict[str, Any]:
-    file_data = gist_data.get("files", {}).get(JOB_FILE)
-    if not file_data:
-        return {"version": 1, "jobs": {}}
-    try:
-        parsed = json.loads(file_data.get("content") or "{}")
-    except json.JSONDecodeError:
-        return {"version": 1, "jobs": {}}
-    if not isinstance(parsed.get("jobs"), dict):
-        parsed["jobs"] = {}
-    parsed["version"] = 1
-    return parsed
-
-
-def prune_jobs(document: dict[str, Any]) -> None:
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=JOB_TTL_HOURS)
-    retained: dict[str, Any] = {}
-    for job_id, job in document.get("jobs", {}).items():
-        try:
-            created = datetime.fromisoformat(str(job.get("created_at", "")).replace("Z", "+00:00"))
-        except ValueError:
-            continue
-        if created >= cutoff or job.get("status") in {"queued", "processing"}:
-            retained[job_id] = job
-    document["jobs"] = retained
+def job_file_name(job_id: str) -> str:
+    return f"{JOB_FILE_PREFIX}{job_id}.json"
 
 
 async def enqueue_job(
     client: httpx.AsyncClient,
     token: str,
-    gist_id: str,
     repo: str,
     job: dict[str, Any],
 ) -> int:
     headers = github_headers(token)
-    gist_url = f"{GITHUB_API}/gists/{gist_id}"
-    gist_response = await client.get(gist_url, headers=headers)
-    gist_response.raise_for_status()
-    document = read_jobs(gist_response.json())
-    prune_jobs(document)
-
-    trigger_id = job.get("trigger_id")
-    if trigger_id:
-        for existing in document["jobs"].values():
-            if existing.get("trigger_id") == trigger_id:
-                return int(existing.get("issue_number") or 0)
-
-    # 새 요청마다 이전 회의실 작업 기록을 비우고 현재 작업 한 건만 저장한다.
-    document = {"version": 1, "jobs": {job["job_id"]: job}}
-    update_response = await client.patch(
-        gist_url,
-        headers=headers,
-        json={"files": {JOB_FILE: {"content": json.dumps(document, ensure_ascii=False, indent=2)}}},
-    )
-    update_response.raise_for_status()
-
-    issue_response = await client.post(
-        f"{GITHUB_API}/repos/{repo}/issues",
+    filename = job_file_name(job["job_id"])
+    gist_response = await client.post(
+        f"{GITHUB_API}/gists",
         headers=headers,
         json={
-            "title": f"{ISSUE_PREFIX} {job['job_id']}",
-            "body": "Dooray 회의실 조회 작업입니다. 실제 요청 데이터는 비공개 Gist에 저장됩니다.",
+            "description": f"meeting-job:{job['job_id']}",
+            "public": False,
+            "files": {filename: {"content": json.dumps(job, ensure_ascii=False, indent=2)}},
         },
     )
-    issue_response.raise_for_status()
-    issue_number = int(issue_response.json()["number"])
+    gist_response.raise_for_status()
+    gist_id = str(gist_response.json()["id"])
+    gist_url = f"{GITHUB_API}/gists/{gist_id}"
 
-    # 작업자가 첫 Gist PATCH 직후 처리를 시작할 수 있으므로 최신 문서를 다시 읽어
-    # issue_number만 병합한다. 오래된 document로 작업 결과를 덮어쓰지 않는다.
-    latest_response = await client.get(gist_url, headers=headers)
-    latest_response.raise_for_status()
-    latest_document = read_jobs(latest_response.json())
-    latest_job = latest_document["jobs"].get(job["job_id"])
-    if latest_job is None:
-        latest_job = dict(job)
-        latest_document["jobs"][job["job_id"]] = latest_job
-    latest_job["issue_number"] = issue_number
-    update_response = await client.patch(
-        gist_url,
-        headers=headers,
-        json={"files": {JOB_FILE: {"content": json.dumps(latest_document, ensure_ascii=False, indent=2)}}},
-    )
-    update_response.raise_for_status()
+    try:
+        issue_response = await client.post(
+            f"{GITHUB_API}/repos/{repo}/issues",
+            headers=headers,
+            json={
+                "title": f"{ISSUE_PREFIX} {job['job_id']}",
+                "body": "Dooray 회의실 조회 작업입니다. 실제 요청 데이터는 요청별 비공개 Gist에 저장됩니다.",
+            },
+        )
+        issue_response.raise_for_status()
+    except Exception:
+        await client.delete(gist_url, headers=headers)
+        raise
+    issue_number = int(issue_response.json()["number"])
     return issue_number
 
 
 @router.post("/dooray/ai")
 async def meeting_command(req: Request):
     github_token = os.environ.get("GITHUB_TOKEN", "")
-    gist_id = os.environ.get("MEETING_GIST_ID", "")
     repo = os.environ.get("GITHUB_REPO", DEFAULT_GITHUB_REPO)
     expected_app_token = os.environ.get("DOORAY_APP_TOKEN", "")
-    if not all((github_token, gist_id, repo, expected_app_token)):
+    if not all((github_token, repo, expected_app_token)):
         return pack({
             "responseType": "ephemeral",
             "text": "⚠️ 회의실 봇의 서버 환경변수가 완성되지 않았습니다.",
@@ -167,20 +121,12 @@ async def meeting_command(req: Request):
             "text": "회의실 봇에서는 조회만 지원합니다. 예약 신청·취소는 웹 화면을 이용해 주세요.",
         })
 
-    response_url = str(data.get("responseUrl") or "")
-    if not response_url.startswith("https://"):
-        return pack({
-            "responseType": "ephemeral",
-            "text": "⚠️ Dooray 후속 응답 URL을 확인할 수 없습니다.",
-        })
-
     now = datetime.now(timezone.utc)
     job_id = uuid.uuid4().hex
     job = {
         "job_id": job_id,
         "status": "queued",
         "query": query,
-        "response_url": response_url,
         "trigger_id": str(data.get("triggerId") or ""),
         "user_id": str(data.get("userId") or ""),
         "channel_id": str(data.get("channelId") or ""),
@@ -188,7 +134,7 @@ async def meeting_command(req: Request):
     }
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            issue_number = await enqueue_job(client, github_token, gist_id, repo, job)
+            issue_number = await enqueue_job(client, github_token, repo, job)
     except Exception as exc:
         return pack({
             "responseType": "ephemeral",
