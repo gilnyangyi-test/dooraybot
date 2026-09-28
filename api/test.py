@@ -5,7 +5,7 @@
 필요한 환경변수
 - GITHUB_TOKEN: Gist 쓰기 권한이 있는 토큰
 - BRIDGE_GIST_ID: 작업을 기록할 비공개 Gist ID
-- DOORAY_TEST_APP_TOKEN: /test 커맨드 앱 토큰 (없으면 DOORAY_APP_TOKEN 사용)
+- DOORAY_APP_TOKEN: 기존 Dooray 슬래시 커맨드 앱 토큰
 """
 
 from __future__ import annotations
@@ -32,10 +32,7 @@ MAX_TEXT_LENGTH = 500
 async def test_command(req: Request):
     github_token = os.environ.get("GITHUB_TOKEN", "")
     gist_id = os.environ.get("BRIDGE_GIST_ID", "")
-    expected_app_token = (
-        os.environ.get("DOORAY_TEST_APP_TOKEN", "")
-        or os.environ.get("DOORAY_APP_TOKEN", "")
-    )
+    expected_app_token = os.environ.get("DOORAY_APP_TOKEN", "")
     if not github_token or not gist_id or not expected_app_token:
         return pack({
             "responseType": "ephemeral",
