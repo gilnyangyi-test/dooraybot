@@ -6,6 +6,7 @@ from api.vacation import router as vacation_router
 # 새로 추가된 qims 라우터 임포트
 from api.qims import router as qims_router
 from api.meeting import router as meeting_router
+from api.test import router as test_router
 
 app = FastAPI(title="Dooray Bot")
 
@@ -15,6 +16,7 @@ app.include_router(vacation_router)
 # 새로 추가된 qims 라우터를 앱에 등록
 app.include_router(qims_router)
 app.include_router(meeting_router)
+app.include_router(test_router)
 
 @app.get("/")
 async def root():
