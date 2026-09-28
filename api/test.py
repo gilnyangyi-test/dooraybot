@@ -49,7 +49,8 @@ async def test_command(req: Request):
 
     text = str(data.get("text") or "").strip()[:MAX_TEXT_LENGTH]
     job_id = uuid.uuid4().hex
-    # responseUrl과 appToken 같은 민감 값은 GitHub에 저장하지 않는다.
+    # 로컬 브리지가 비동기 분석 결과를 원래 요청자에게 돌려주기 위해 Dooray의 일회성 responseUrl을 전달한다.
+    # appToken은 절대 저장하지 않는다. Gist는 반드시 비공개로 운영해야 한다.
     job = {
         "job_id": job_id,
         "command": str(data.get("command") or "/test"),
@@ -57,6 +58,7 @@ async def test_command(req: Request):
         "user_id": str(data.get("userId") or ""),
         "channel_id": str(data.get("channelId") or ""),
         "tenant_id": str(data.get("tenantId") or ""),
+        "response_url": str(data.get("responseUrl") or ""),
         "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
 
