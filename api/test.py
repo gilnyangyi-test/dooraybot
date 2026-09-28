@@ -1,4 +1,12 @@
-"""Dooray /test 요청을 브라우저 브리지용 비공개 Gist 작업으로 등록한다."""
+"""Dooray /test 요청을 브라우저 브리지용 고정 비공개 Gist의 job.json에 덮어쓴다.
+
+사내 브리지 서버가 이 Gist를 주기적으로 조회하다가 job_id가 바뀌면 새 작업으로 처리한다.
+
+필요한 환경변수
+- GITHUB_TOKEN: Gist 쓰기 권한이 있는 토큰
+- BRIDGE_GIST_ID: 작업을 기록할 비공개 Gist ID
+- DOORAY_TEST_APP_TOKEN: /test 커맨드 앱 토큰 (없으면 DOORAY_APP_TOKEN 사용)
+"""
 
 from __future__ import annotations
 
@@ -16,7 +24,6 @@ from api.common import pack
 
 router = APIRouter()
 GITHUB_API = os.environ.get("GITHUB_API_BASE", "https://api.github.com")
-JOB_DESCRIPTION_PREFIX = "dooray-bridge-job:"
 JOB_FILE_NAME = "job.json"
 MAX_TEXT_LENGTH = 500
 
@@ -24,14 +31,15 @@ MAX_TEXT_LENGTH = 500
 @router.post("/dooray/test")
 async def test_command(req: Request):
     github_token = os.environ.get("GITHUB_TOKEN", "")
+    gist_id = os.environ.get("BRIDGE_GIST_ID", "")
     expected_app_token = (
         os.environ.get("DOORAY_TEST_APP_TOKEN", "")
         or os.environ.get("DOORAY_APP_TOKEN", "")
     )
-    if not github_token or not expected_app_token:
+    if not github_token or not gist_id or not expected_app_token:
         return pack({
             "responseType": "ephemeral",
-            "text": "⚠️ /test 서버 환경변수가 설정되지 않았습니다.",
+            "text": "⚠️ /test 서버 환경변수(GITHUB_TOKEN, BRIDGE_GIST_ID, DOORAY_APP_TOKEN)가 설정되지 않았습니다.",
         })
 
     data = await req.json()
@@ -57,16 +65,15 @@ async def test_command(req: Request):
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                f"{GITHUB_API}/gists",
+            # 새 Gist를 만들지 않고 고정 Gist의 job.json만 덮어쓴다.
+            response = await client.patch(
+                f"{GITHUB_API}/gists/{gist_id}",
                 headers={
                     "Authorization": f"Bearer {github_token}",
                     "Accept": "application/vnd.github+json",
                     "X-GitHub-Api-Version": "2022-11-28",
                 },
                 json={
-                    "description": f"{JOB_DESCRIPTION_PREFIX}{job_id}",
-                    "public": False,
                     "files": {
                         JOB_FILE_NAME: {
                             "content": json.dumps(job, ensure_ascii=False, indent=2)
