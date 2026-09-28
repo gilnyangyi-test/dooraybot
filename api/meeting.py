@@ -115,11 +115,7 @@ async def meeting_command(req: Request):
             "responseType": "ephemeral",
             "text": '사용법: /ai "10월 1일 예약 현황을 알려줘"',
         })
-    if contains_mutation_request(query):
-        return pack({
-            "responseType": "ephemeral",
-            "text": "회의실 봇에서는 조회만 지원합니다. 예약 신청·취소는 웹 화면을 이용해 주세요.",
-        })
+    mutation_requested = contains_mutation_request(query)
 
     now = datetime.now(timezone.utc)
     job_id = uuid.uuid4().hex
@@ -130,6 +126,7 @@ async def meeting_command(req: Request):
         "trigger_id": str(data.get("triggerId") or ""),
         "user_id": str(data.get("userId") or ""),
         "channel_id": str(data.get("channelId") or ""),
+        "mutation_requested": mutation_requested,
         "created_at": now.isoformat().replace("+00:00", "Z"),
     }
     try:
@@ -143,5 +140,9 @@ async def meeting_command(req: Request):
 
     return pack({
         "responseType": "inChannel",
-        "text": f'회의실 정보를 조회 중입니다. (약 1분 소요)\n질의 : "{query}"',
+        "text": (
+            f'회의실 예약 요청을 처리 중입니다. (약 1분 소요)\n질의 : "{query}"'
+            if mutation_requested
+            else f'회의실 정보를 조회 중입니다. (약 1분 소요)\n질의 : "{query}"'
+        ),
     })
