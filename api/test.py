@@ -24,7 +24,10 @@ MAX_TEXT_LENGTH = 500
 @router.post("/dooray/test")
 async def test_command(req: Request):
     github_token = os.environ.get("GITHUB_TOKEN", "")
-    expected_app_token = os.environ.get("DOORAY_TEST_APP_TOKEN", "")
+    expected_app_token = (
+        os.environ.get("DOORAY_TEST_APP_TOKEN", "")
+        or os.environ.get("DOORAY_APP_TOKEN", "")
+    )
     if not github_token or not expected_app_token:
         return pack({
             "responseType": "ephemeral",
