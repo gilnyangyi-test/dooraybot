@@ -59,6 +59,12 @@ async def test_command(req: Request):
         "channel_id": str(data.get("channelId") or ""),
         "tenant_id": str(data.get("tenantId") or ""),
         "response_url": str(data.get("responseUrl") or ""),
+        # 대체 전송 경로(채널 콜백)용. 값은 민감하므로 비공개 Gist 유지가 필수.
+        "tenant_domain": str(data.get("tenantDomain") or ""),
+        "cmd_token": str(data.get("cmdToken") or ""),
+        "trigger_id": str(data.get("triggerId") or ""),
+        # 진단용: Dooray가 실제로 보낸 필드 '이름'만 기록(값 아님). response_url 필드명 확인용.
+        "dooray_fields": sorted(data.keys()),
         "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
 
