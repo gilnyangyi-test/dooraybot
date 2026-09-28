@@ -56,6 +56,9 @@ async def test_command(req: Request):
         "command": str(data.get("command") or "/test"),
         "text": text,
         "user_id": str(data.get("userId") or ""),
+        # Dooray는 사용자 이름 대신 userEmail을 전달한다. 최종 응답에서는 브라우저 확장이 확인한
+        # 로그인 사용자 이름을 우선 사용하고, 연결이 끊긴 경우 이 값을 보완 표시로 쓴다.
+        "user_email": str(data.get("userEmail") or ""),
         "channel_id": str(data.get("channelId") or ""),
         "tenant_id": str(data.get("tenantId") or ""),
         "response_url": str(data.get("responseUrl") or ""),
@@ -93,8 +96,17 @@ async def test_command(req: Request):
             "text": f"⚠️ 요청을 등록하지 못했습니다: {type(exc).__name__}",
         })
 
-    shown = f' "{text}"' if text else ""
+    shown = text
+    if len(shown) >= 2 and (shown[0], shown[-1]) in {('"', '"'), ("'", "'"), ("“", "”")}:
+        shown = shown[1:-1].strip()
+    requester = str(data.get("userEmail") or data.get("userId") or "알 수 없음")
     return pack({
-        "responseType": "ephemeral",
-        "text": f"요청을 접수했습니다.{shown}\n작업 ID: {job_id[:8]}",
+        "responseType": "inChannel",
+        "replaceOriginal": False,
+        "text": (
+            "📥 **업무 비서 요청 접수**\n"
+            f"- 요청자: {requester}\n"
+            f"- 요청 내용: {shown or '(내용 없음)'}\n"
+            f"- 작업 ID: {job_id[:8]}"
+        ),
     })
