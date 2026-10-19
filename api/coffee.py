@@ -67,6 +67,26 @@ MENU_SECTIONS = {
 
 
 # =========================================================
+# 디카페인 가능 메뉴
+# 여기에 있는 메뉴만 "🌙 디카페인 선택" 드롭다운에 노출된다.
+# =========================================================
+DECAF_MENUS = {
+    "에스프레소",
+    "아메리카노",
+    "카페라떼",
+    "카푸치노",
+    "바닐라라떼",
+    "돌체라떼",
+    "시나몬라떼",
+    "헤이즐넛라떼",
+    "카라멜마키야토",
+    "카페모카",
+    "피치프레소",
+}
+DECAF_SUFFIX = "·디카페인"
+
+
+# =========================================================
 # 섹션 스타일
 # =========================================================
 SECTION_STYLE = {
@@ -130,7 +150,20 @@ def get_action_value(data: dict) -> str:
 
     if isinstance(actions, list) and actions:
         first_action = actions[0] or {}
-        return (first_action.get("value") or "").strip()
+        value = (first_action.get("value") or "").strip()
+
+        if value:
+            return value
+
+        # select(드롭다운) 선택값
+        selected = (
+            first_action.get("selectedOptions")
+            or first_action.get("selected_options")
+            or []
+        )
+
+        if isinstance(selected, list) and selected:
+            return ((selected[0] or {}).get("value") or "").strip()
 
     return ""
 
@@ -209,9 +242,49 @@ def status_attachment(fields=None) -> dict:
 
 
 # =========================================================
-# 섹션별 메뉴 버튼 생성
+# 메뉴별 선택 가능한 온도 (ICE / HOT)
 # =========================================================
-def section_block_buttons(section: str) -> list[dict]:
+def menu_temperatures(section: str, menu: str) -> list[str]:
+    allow_hot = (
+        section not in ["스무디", "병음료"]
+        and menu not in ["복숭아 아이스티", "딸기라떼"]
+        and "요거트" not in menu
+        and not menu.startswith("ICE ")
+    )
+
+    return ["ICE", "HOT"] if allow_hot else ["ICE"]
+
+
+# =========================================================
+# 드롭다운 옵션 생성
+#
+# value 형식: vote|섹션|메뉴|온도
+# 디카페인은 온도 뒤에 DECAF_SUFFIX를 붙여서
+# "아메리카노 (ICE·디카페인)" 키로 집계된다.
+# =========================================================
+def menu_options(section: str, menus: list[str], suffix: str = "") -> list[dict]:
+    options = []
+
+    for menu in menus:
+        for temperature in menu_temperatures(section, menu):
+            label = f"{temperature}{suffix}"
+            options.append(
+                {
+                    "text": f"{menu} ({label})",
+                    "value": f"vote|{section}|{menu}|{label}",
+                }
+            )
+
+    return options
+
+
+# =========================================================
+# 섹션별 메뉴 드롭다운 생성
+#
+# 버튼 대신 섹션마다 select 하나로 표시해 메시지 길이를 줄인다.
+# 커피 섹션은 디카페인 드롭다운을 하나 더 붙인다.
+# =========================================================
+def section_blocks(section: str) -> list[dict]:
     style = SECTION_STYLE.get(
         section,
         {
@@ -220,54 +293,41 @@ def section_block_buttons(section: str) -> list[dict]:
         },
     )
 
-    blocks = [
+    menus = MENU_SECTIONS[section]
+
+    actions = [
+        {
+            "name": f"vote::{section}",
+            "type": "select",
+            "text": f"{section} 메뉴 선택",
+            "options": menu_options(section, menus),
+        }
+    ]
+
+    decaf_menus = [menu for menu in menus if menu in DECAF_MENUS]
+
+    if decaf_menus:
+        actions.append(
+            {
+                "name": f"vote::{section}::decaf",
+                "type": "select",
+                "text": "🌙 디카페인 선택",
+                "options": menu_options(section, decaf_menus, DECAF_SUFFIX),
+            }
+        )
+
+    return [
         {
             "callbackId": "coffee-poll",
             "title": f"{style['emoji']}  {section}",
             "color": style["color"],
-        }
-    ]
-
-    actions = []
-
-    for menu in MENU_SECTIONS[section]:
-        # ICE 버튼
-        actions.append(
-            {
-                "name": f"vote::{section}",
-                "type": "button",
-                "text": f"{menu} (ICE)",
-                "value": f"vote|{section}|{menu}|ICE",
-            }
-        )
-
-        # HOT 버튼 생성 조건
-        allow_hot = (
-            section not in ["스무디", "병음료"]
-            and menu not in ["복숭아 아이스티", "딸기라떼"]
-            and "요거트" not in menu
-            and not menu.startswith("ICE ")
-        )
-
-        if allow_hot:
-            actions.append(
-                {
-                    "name": f"vote::{section}",
-                    "type": "button",
-                    "text": f"{menu} (HOT)",
-                    "value": f"vote|{section}|{menu}|HOT",
-                }
-            )
-
-    blocks.append(
+        },
         {
             "callbackId": "coffee-poll",
             "actions": actions,
             "color": style["color"],
-        }
-    )
-
-    return blocks
+        },
+    ]
 
 
 # =========================================================
@@ -374,7 +434,7 @@ def create_coffee_poll():
     section_order = list(MENU_SECTIONS.keys())
 
     for section in section_order:
-        attachments.extend(section_block_buttons(section))
+        attachments.extend(section_blocks(section))
 
     attachments.extend(control_button_block())
     attachments.append(status_attachment())
@@ -565,7 +625,7 @@ def handle_reopen_action(data: dict):
     status = parse_status(original)
     attachments = []
     for section in MENU_SECTIONS:
-        attachments.extend(section_block_buttons(section))
+        attachments.extend(section_blocks(section))
     attachments.extend(control_button_block())
     attachments.append(status_attachment(status_fields(status)))
     return pack({
