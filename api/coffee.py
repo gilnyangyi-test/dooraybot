@@ -320,12 +320,10 @@ def menu_select(
 # 메시지 높이를 줄인다. 섹션 이름은 드롭다운 placeholder로 표시.
 # 커피 섹션 뒤에는 디카페인 드롭다운을 하나 더 붙인다.
 #
-# 드롭다운 name은 "기본이름::nonce" 형식이다.
-# - prev_names에 있는 드롭다운은 기존 name을 그대로 유지
-#   → 다른 사람이 열어둔 드롭다운이 닫히지 않음
-# - reset에 든 드롭다운만 nonce를 새로 붙임
-#   → 두레이가 새 드롭다운으로 인식해 선택 표시가 초기화됨
-# (투표 처리는 option value로만 하므로 name이 바뀌어도 영향 없음)
+# 드롭다운마다 독립된 attachment 블록을 생성하고
+# name과 callbackId를 고정값으로 유지하여,
+# 선택 현황 attachment가 갱신될 때 다른 사람이 열어둔 드롭다운이
+# 리렌더링으로 닫히는 현상을 최소화한다.
 # =========================================================
 def dropdown_base(section: str, decaf: bool = False) -> str:
     return f"vote::{section}::decaf" if decaf else f"vote::{section}"
@@ -335,42 +333,41 @@ def menu_select_block(
     prev_names: dict | None = None,
     reset: set | None = None,
 ) -> list[dict]:
-    prev_names = prev_names or {}
-    reset = reset or set()
-    nonce = time.time_ns()
-
-    def name_of(base: str) -> str:
-        if base in prev_names and base not in reset:
-            return prev_names[base]
-        return f"{base}::{nonce}"
-
-    actions = []
+    blocks = []
 
     for section, menus in MENU_SECTIONS.items():
-        actions.append(
-            menu_select(name_of(dropdown_base(section)), section, section, menus)
+        base = dropdown_base(section)
+        blocks.append(
+            {
+                "callbackId": f"coffee-poll::{base}",
+                "actions": [
+                    menu_select(base, section, section, menus),
+                ],
+                "color": MENU_BLOCK_COLOR,
+            }
         )
 
         decaf_menus = [menu for menu in menus if menu in DECAF_MENUS]
 
         if decaf_menus:
-            actions.append(
-                menu_select(
-                    name_of(dropdown_base(section, decaf=True)),
-                    "디카페인",
-                    section,
-                    decaf_menus,
-                    DECAF_PREFIX,
-                )
+            decaf_base = dropdown_base(section, decaf=True)
+            blocks.append(
+                {
+                    "callbackId": f"coffee-poll::{decaf_base}",
+                    "actions": [
+                        menu_select(
+                            decaf_base,
+                            "디카페인",
+                            section,
+                            decaf_menus,
+                            DECAF_PREFIX,
+                        ),
+                    ],
+                    "color": MENU_BLOCK_COLOR,
+                }
             )
 
-    return [
-        {
-            "callbackId": "coffee-poll",
-            "actions": actions,
-            "color": MENU_BLOCK_COLOR,
-        }
-    ]
+    return blocks
 
 
 # =========================================================
