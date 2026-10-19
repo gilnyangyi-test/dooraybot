@@ -87,30 +87,9 @@ DECAF_SUFFIX = "·디카페인"
 
 
 # =========================================================
-# 섹션 스타일
+# 메뉴 드롭다운 블록 색상
 # =========================================================
-SECTION_STYLE = {
-    "추천메뉴": {
-        "emoji": "✨",
-        "color": "#7C3AED",
-    },
-    "스무디": {
-        "emoji": "🍓",
-        "color": "#06B6D4",
-    },
-    "커피": {
-        "emoji": "☕",
-        "color": "#F59E0B",
-    },
-    "음료": {
-        "emoji": "🥤",
-        "color": "#10B981",
-    },
-    "병음료": {
-        "emoji": "🧃",
-        "color": "#EF4444",
-    },
-}
+MENU_BLOCK_COLOR = "#F59E0B"
 
 
 # =========================================================
@@ -261,17 +240,24 @@ def menu_temperatures(section: str, menu: str) -> list[str]:
 # value 형식: vote|섹션|메뉴|온도
 # 디카페인은 온도 뒤에 DECAF_SUFFIX를 붙여서
 # "아메리카노 (ICE·디카페인)" 키로 집계된다.
+#
+# 드롭다운 폭이 좁아 글자가 잘리므로 표시 텍스트는 짧게 만든다.
+# - ICE만 있는 메뉴: 메뉴명만 표시
+# - ICE/HOT 둘 다 있는 메뉴: "메뉴 ICE" / "메뉴 HOT"
+# - 디카페인 접미사는 표시하지 않음 (선택 현황에는 그대로 집계)
 # =========================================================
 def menu_options(section: str, menus: list[str], suffix: str = "") -> list[dict]:
     options = []
 
     for menu in menus:
-        for temperature in menu_temperatures(section, menu):
-            label = f"{temperature}{suffix}"
+        temperatures = menu_temperatures(section, menu)
+
+        for temperature in temperatures:
+            text = menu if len(temperatures) == 1 else f"{menu} {temperature}"
             options.append(
                 {
-                    "text": f"{menu} ({label})",
-                    "value": f"vote|{section}|{menu}|{label}",
+                    "text": text,
+                    "value": f"vote|{section}|{menu}|{temperature}{suffix}",
                 }
             )
 
@@ -279,54 +265,43 @@ def menu_options(section: str, menus: list[str], suffix: str = "") -> list[dict]
 
 
 # =========================================================
-# 섹션별 메뉴 드롭다운 생성
+# 메뉴 드롭다운 블록 생성
 #
-# 버튼 대신 섹션마다 select 하나로 표시해 메시지 길이를 줄인다.
-# 커피 섹션은 디카페인 드롭다운을 하나 더 붙인다.
+# 섹션 제목 줄 없이 모든 섹션의 select를 한 블록에 모아
+# 메시지 높이를 줄인다. 섹션 이름은 드롭다운 placeholder로 표시.
+# 커피 섹션 뒤에는 디카페인 드롭다운을 하나 더 붙인다.
 # =========================================================
-def section_blocks(section: str) -> list[dict]:
-    style = SECTION_STYLE.get(
-        section,
-        {
-            "emoji": "•",
-            "color": "#4757C4",
-        },
-    )
+def menu_select_block() -> list[dict]:
+    actions = []
 
-    menus = MENU_SECTIONS[section]
-
-    actions = [
-        {
-            "name": f"vote::{section}",
-            "type": "select",
-            "text": f"{section} 메뉴 선택",
-            "options": menu_options(section, menus),
-        }
-    ]
-
-    decaf_menus = [menu for menu in menus if menu in DECAF_MENUS]
-
-    if decaf_menus:
+    for section, menus in MENU_SECTIONS.items():
         actions.append(
             {
-                "name": f"vote::{section}::decaf",
+                "name": f"vote::{section}",
                 "type": "select",
-                "text": "🌙 디카페인 선택",
-                "options": menu_options(section, decaf_menus, DECAF_SUFFIX),
+                "text": section,
+                "options": menu_options(section, menus),
             }
         )
+
+        decaf_menus = [menu for menu in menus if menu in DECAF_MENUS]
+
+        if decaf_menus:
+            actions.append(
+                {
+                    "name": f"vote::{section}::decaf",
+                    "type": "select",
+                    "text": "디카페인",
+                    "options": menu_options(section, decaf_menus, DECAF_SUFFIX),
+                }
+            )
 
     return [
         {
             "callbackId": "coffee-poll",
-            "title": f"{style['emoji']}  {section}",
-            "color": style["color"],
-        },
-        {
-            "callbackId": "coffee-poll",
             "actions": actions,
-            "color": style["color"],
-        },
+            "color": MENU_BLOCK_COLOR,
+        }
     ]
 
 
@@ -433,9 +408,7 @@ def create_coffee_poll():
 
     section_order = list(MENU_SECTIONS.keys())
 
-    for section in section_order:
-        attachments.extend(section_blocks(section))
-
+    attachments.extend(menu_select_block())
     attachments.extend(control_button_block())
     attachments.append(status_attachment())
 
@@ -624,8 +597,7 @@ def handle_reopen_action(data: dict):
         return pack({})
     status = parse_status(original)
     attachments = []
-    for section in MENU_SECTIONS:
-        attachments.extend(section_blocks(section))
+    attachments.extend(menu_select_block())
     attachments.extend(control_button_block())
     attachments.append(status_attachment(status_fields(status)))
     return pack({
