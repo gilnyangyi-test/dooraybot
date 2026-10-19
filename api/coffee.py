@@ -1,3 +1,5 @@
+import time
+
 from fastapi import APIRouter, Request
 
 from api.common import pack
@@ -317,13 +319,36 @@ def menu_select(
 # 섹션 제목 줄 없이 모든 섹션의 select를 한 블록에 모아
 # 메시지 높이를 줄인다. 섹션 이름은 드롭다운 placeholder로 표시.
 # 커피 섹션 뒤에는 디카페인 드롭다운을 하나 더 붙인다.
+#
+# 드롭다운 name은 "기본이름::nonce" 형식이다.
+# - prev_names에 있는 드롭다운은 기존 name을 그대로 유지
+#   → 다른 사람이 열어둔 드롭다운이 닫히지 않음
+# - reset에 든 드롭다운만 nonce를 새로 붙임
+#   → 두레이가 새 드롭다운으로 인식해 선택 표시가 초기화됨
+# (투표 처리는 option value로만 하므로 name이 바뀌어도 영향 없음)
 # =========================================================
-def menu_select_block() -> list[dict]:
+def dropdown_base(section: str, decaf: bool = False) -> str:
+    return f"vote::{section}::decaf" if decaf else f"vote::{section}"
+
+
+def menu_select_block(
+    prev_names: dict | None = None,
+    reset: set | None = None,
+) -> list[dict]:
+    prev_names = prev_names or {}
+    reset = reset or set()
+    nonce = time.time_ns()
+
+    def name_of(base: str) -> str:
+        if base in prev_names and base not in reset:
+            return prev_names[base]
+        return f"{base}::{nonce}"
+
     actions = []
 
     for section, menus in MENU_SECTIONS.items():
         actions.append(
-            menu_select(f"vote::{section}", section, section, menus)
+            menu_select(name_of(dropdown_base(section)), section, section, menus)
         )
 
         decaf_menus = [menu for menu in menus if menu in DECAF_MENUS]
@@ -331,7 +356,7 @@ def menu_select_block() -> list[dict]:
         if decaf_menus:
             actions.append(
                 menu_select(
-                    f"vote::{section}::decaf",
+                    name_of(dropdown_base(section, decaf=True)),
                     "디카페인",
                     section,
                     decaf_menus,
@@ -407,28 +432,59 @@ def remove_user_votes(status: dict, user_tag: str) -> dict:
 
 
 # =========================================================
-# 갱신된 status를 반영한 최종 응답 메시지 생성
-# (기존 버튼은 유지하고 선택 현황만 교체)
+# 기존 메시지의 드롭다운 name 읽기 → {기본이름: name}
 # =========================================================
-def rebuild_poll_message(original: dict, status: dict):
-    updated_fields = status_fields(status)
-
-    new_attachments = []
-    status_replaced = False
+def select_names(original: dict) -> dict:
+    names = {}
 
     for attachment in original.get("attachments") or []:
-        if attachment.get("title") == "선택 현황":
-            new_attachments.append(
-                status_attachment(updated_fields)
-            )
-            status_replaced = True
-        else:
-            new_attachments.append(attachment)
+        for action in attachment.get("actions") or []:
+            name = action.get("name") or ""
 
-    if not status_replaced:
-        new_attachments.append(
-            status_attachment(updated_fields)
-        )
+            if action.get("type") != "select" or not name.startswith("vote::"):
+                continue
+
+            base, _, last = name.rpartition("::")
+            names[base if last.isdigit() else name] = name
+
+    return names
+
+
+# =========================================================
+# 사용자의 현재 투표가 어느 드롭다운에서 고른 것인지 찾기
+#
+# 선택 현황 키 "디카페인 아메리카노 (ICE)" → "vote::커피::decaf"
+# 드롭다운 메뉴가 아니면(선택안함 등) None
+# =========================================================
+def user_vote_dropdown(status: dict, user_tag: str) -> str | None:
+    for key, voters in status.items():
+        if user_tag not in voters:
+            continue
+
+        menu = key.rsplit(" (", 1)[0]
+        decaf = menu.startswith(DECAF_PREFIX)
+
+        if decaf:
+            menu = menu[len(DECAF_PREFIX):]
+
+        for section, menus in MENU_SECTIONS.items():
+            if menu in menus:
+                return dropdown_base(section, decaf)
+
+    return None
+
+
+# =========================================================
+# 갱신된 status를 반영한 최종 응답 메시지 생성
+#
+# 드롭다운은 기존 name을 유지하고, reset에 든 드롭다운만
+# 새 name으로 바꿔 선택 표시를 초기화한다.
+# =========================================================
+def rebuild_poll_message(original: dict, status: dict, reset: set | None = None):
+    new_attachments = []
+    new_attachments.extend(menu_select_block(select_names(original), reset))
+    new_attachments.extend(control_button_block())
+    new_attachments.append(status_attachment(status_fields(status)))
 
     return pack(
         {
@@ -504,6 +560,17 @@ def handle_coffee_action(
     )
 
     # -----------------------------------------------------
+    # 이전에 다른 드롭다운에서 골랐다면 그 드롭다운만 초기화
+    # -----------------------------------------------------
+    prev_dropdown = user_vote_dropdown(status, user_tag)
+    current_dropdown = dropdown_base(section, menu.startswith(DECAF_PREFIX))
+    reset = (
+        {prev_dropdown}
+        if prev_dropdown and prev_dropdown != current_dropdown
+        else set()
+    )
+
+    # -----------------------------------------------------
     # 사용자당 전체 메뉴 중 하나만 선택 가능
     # 사용자의 기존 선택을 모두 제거
     # -----------------------------------------------------
@@ -527,7 +594,7 @@ def handle_coffee_action(
         },
     )
 
-    return rebuild_poll_message(original, status)
+    return rebuild_poll_message(original, status, reset)
 
 
 # =========================================================
@@ -559,6 +626,10 @@ def handle_clear_action(data: dict):
         status.get(NO_SELECTION_KEY) or []
     )
 
+    # 기존에 고른 메뉴가 있으면 그 드롭다운 선택 표시 초기화
+    prev_dropdown = user_vote_dropdown(status, user_tag)
+    reset = {prev_dropdown} if prev_dropdown else set()
+
     # 사용자의 기존 선택(메뉴든 "선택안함"이든)을 전부 제거
     status = remove_user_votes(status, user_tag)
 
@@ -583,7 +654,7 @@ def handle_clear_action(data: dict):
             },
         )
 
-    return rebuild_poll_message(original, status)
+    return rebuild_poll_message(original, status, reset)
 
 def handle_close_action(data: dict):
     original = data.get("originalMessage") or {}
