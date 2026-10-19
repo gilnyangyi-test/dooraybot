@@ -83,7 +83,7 @@ DECAF_MENUS = {
     "카페모카",
     "피치프레소",
 }
-DECAF_SUFFIX = "·디카페인"
+DECAF_PREFIX = "디카페인 "
 
 
 # =========================================================
@@ -235,33 +235,80 @@ def menu_temperatures(section: str, menu: str) -> list[str]:
 
 
 # =========================================================
-# 드롭다운 옵션 생성
+# 드롭다운 표시 폭 계산 / 맞추기
 #
-# value 형식: vote|섹션|메뉴|온도
-# 디카페인은 온도 뒤에 DECAF_SUFFIX를 붙여서
-# "아메리카노 (ICE·디카페인)" 키로 집계된다.
+# 한글 등 전각 문자는 2칸, 그 외는 1칸으로 계산한다.
+# 드롭다운 안의 모든 텍스트를 가장 긴 텍스트 폭에 맞춰
+# 뒤쪽을 공백으로 채워, 폭이 가장 긴 메뉴명 기준으로 잡히게 한다.
+# (U+3000 전각 공백은 HTML 공백 병합/trim 대상이 아니라 유지됨)
+# =========================================================
+FULL_WIDTH_SPACE = "　"
+HALF_WIDTH_SPACE = " "
+
+
+def display_width(text: str) -> int:
+    return sum(2 if ord(char) > 0x2E80 else 1 for char in text)
+
+
+def pad_to_width(text: str, width: int) -> str:
+    gap = width - display_width(text)
+
+    if gap <= 0:
+        return text
+
+    return text + FULL_WIDTH_SPACE * (gap // 2) + HALF_WIDTH_SPACE * (gap % 2)
+
+
+# =========================================================
+# 드롭다운 생성
 #
-# 드롭다운 폭이 좁아 글자가 잘리므로 표시 텍스트는 짧게 만든다.
+# option value 형식: vote|섹션|메뉴|온도
+# 디카페인은 메뉴명 앞에 DECAF_PREFIX를 붙여서
+# "디카페인 아메리카노 (ICE)" 키로 집계된다.
+#
+# 표시 텍스트
 # - ICE만 있는 메뉴: 메뉴명만 표시
 # - ICE/HOT 둘 다 있는 메뉴: "메뉴 ICE" / "메뉴 HOT"
-# - 디카페인 접미사는 표시하지 않음 (선택 현황에는 그대로 집계)
 # =========================================================
-def menu_options(section: str, menus: list[str], suffix: str = "") -> list[dict]:
+def menu_select(
+    name: str,
+    placeholder: str,
+    section: str,
+    menus: list[str],
+    prefix: str = "",
+) -> dict:
     options = []
 
     for menu in menus:
         temperatures = menu_temperatures(section, menu)
+        menu_name = f"{prefix}{menu}"
 
         for temperature in temperatures:
-            text = menu if len(temperatures) == 1 else f"{menu} {temperature}"
             options.append(
                 {
-                    "text": text,
-                    "value": f"vote|{section}|{menu}|{temperature}{suffix}",
+                    "text": (
+                        menu_name
+                        if len(temperatures) == 1
+                        else f"{menu_name} {temperature}"
+                    ),
+                    "value": f"vote|{section}|{menu_name}|{temperature}",
                 }
             )
 
-    return options
+    width = max(
+        display_width(text)
+        for text in [placeholder] + [option["text"] for option in options]
+    )
+
+    for option in options:
+        option["text"] = pad_to_width(option["text"], width)
+
+    return {
+        "name": name,
+        "type": "select",
+        "text": pad_to_width(placeholder, width),
+        "options": options,
+    }
 
 
 # =========================================================
@@ -276,24 +323,20 @@ def menu_select_block() -> list[dict]:
 
     for section, menus in MENU_SECTIONS.items():
         actions.append(
-            {
-                "name": f"vote::{section}",
-                "type": "select",
-                "text": section,
-                "options": menu_options(section, menus),
-            }
+            menu_select(f"vote::{section}", section, section, menus)
         )
 
         decaf_menus = [menu for menu in menus if menu in DECAF_MENUS]
 
         if decaf_menus:
             actions.append(
-                {
-                    "name": f"vote::{section}::decaf",
-                    "type": "select",
-                    "text": "디카페인",
-                    "options": menu_options(section, decaf_menus, DECAF_SUFFIX),
-                }
+                menu_select(
+                    f"vote::{section}::decaf",
+                    "디카페인",
+                    section,
+                    decaf_menus,
+                    DECAF_PREFIX,
+                )
             )
 
     return [
@@ -425,9 +468,9 @@ def create_coffee_poll():
 # =========================================================
 # 버튼 클릭 처리 (메뉴 선택)
 #
-# - 처음 클릭: 해당 메뉴로 투표 등록 (기존 선택은 자동 해제)
-# - 이미 선택한 것과 동일한 버튼 재클릭("더블클릭" 대응):
-#   선택을 취소(토글 off)하고 미선택 상태로 되돌림
+# - 선택한 메뉴로 투표 등록 (기존 선택은 자동 해제)
+# - 같은 메뉴를 다시 골라도 취소되지 않음
+#   (취소는 "선택안함" 버튼으로)
 # =========================================================
 def handle_coffee_action(
     data: dict,
@@ -460,45 +503,29 @@ def handle_coffee_action(
         user_id=user_id,
     )
 
-    # 지금 누른 버튼을 이미 선택하고 있었는지 (토글 취소 판단)
-    already_selected = user_tag in (status.get(selected_key) or [])
-
     # -----------------------------------------------------
     # 사용자당 전체 메뉴 중 하나만 선택 가능
     # 사용자의 기존 선택을 모두 제거
     # -----------------------------------------------------
     status = remove_user_votes(status, user_tag)
 
-    if already_selected:
-        # 같은 버튼을 다시 클릭 → 선택 취소 (미선택 상태로)
-        print(
-            "[COFFEE VOTE TOGGLE OFF]",
-            {
-                "section": section,
-                "menu": menu,
-                "temperature": temperature,
-                "user_id": user_id,
-            },
-        )
-    else:
-        # -------------------------------------------------
-        # 새 메뉴에 현재 사용자 추가
-        # -------------------------------------------------
-        status.setdefault(selected_key, [])
+    # -----------------------------------------------------
+    # 선택한 메뉴에 현재 사용자 추가
+    # (같은 메뉴를 다시 골라도 취소되지 않고 그대로 유지)
+    # -----------------------------------------------------
+    status.setdefault(selected_key, [])
+    status[selected_key].append(user_tag)
 
-        if user_tag not in status[selected_key]:
-            status[selected_key].append(user_tag)
-
-        print(
-            "[COFFEE VOTE]",
-            {
-                "section": section,
-                "menu": menu,
-                "temperature": temperature,
-                "user_id": user_id,
-                "status": status,
-            },
-        )
+    print(
+        "[COFFEE VOTE]",
+        {
+            "section": section,
+            "menu": menu,
+            "temperature": temperature,
+            "user_id": user_id,
+            "status": status,
+        },
+    )
 
     return rebuild_poll_message(original, status)
 
@@ -634,7 +661,7 @@ async def coffee_endpoint(req: Request):
     if action_value == CLOSE_ACTION_VALUE:
         return handle_close_action(data=data)
 
-    # 메뉴 버튼 클릭 (같은 버튼 재클릭 시 내부적으로 토글 취소 처리)
+    # 메뉴 드롭다운 선택
     if action_value.startswith("vote|"):
         return handle_coffee_action(
             data=data,
