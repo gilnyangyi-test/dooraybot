@@ -1,5 +1,3 @@
-import time
-
 from fastapi import APIRouter, Request
 
 from api.common import pack
@@ -319,18 +317,13 @@ def menu_select(
 # 섹션 제목 줄 없이 모든 섹션의 select를 한 블록에 모아
 # 메시지 높이를 줄인다. 섹션 이름은 드롭다운 placeholder로 표시.
 # 커피 섹션 뒤에는 디카페인 드롭다운을 하나 더 붙인다.
-#
-# 드롭다운 name 끝에 매번 바뀌는 값을 붙여, 두레이가 새 드롭다운으로
-# 인식하고 기존 선택 표시를 초기화하게 한다.
-# (투표 처리는 option value로만 하므로 name이 바뀌어도 영향 없음)
 # =========================================================
 def menu_select_block() -> list[dict]:
     actions = []
-    nonce = time.time_ns()
 
     for section, menus in MENU_SECTIONS.items():
         actions.append(
-            menu_select(f"vote::{section}::{nonce}", section, section, menus)
+            menu_select(f"vote::{section}", section, section, menus)
         )
 
         decaf_menus = [menu for menu in menus if menu in DECAF_MENUS]
@@ -338,7 +331,7 @@ def menu_select_block() -> list[dict]:
         if decaf_menus:
             actions.append(
                 menu_select(
-                    f"vote::{section}::decaf::{nonce}",
+                    f"vote::{section}::decaf",
                     "디카페인",
                     section,
                     decaf_menus,
@@ -415,15 +408,27 @@ def remove_user_votes(status: dict, user_tag: str) -> dict:
 
 # =========================================================
 # 갱신된 status를 반영한 최종 응답 메시지 생성
-#
-# 드롭다운 블록을 원본에서 복사하지 않고 새로 만들어 보내서,
-# 한 목록에서 선택하면 다른 목록의 기존 선택 표시가 초기화되게 한다.
+# (기존 버튼은 유지하고 선택 현황만 교체)
 # =========================================================
 def rebuild_poll_message(original: dict, status: dict):
+    updated_fields = status_fields(status)
+
     new_attachments = []
-    new_attachments.extend(menu_select_block())
-    new_attachments.extend(control_button_block())
-    new_attachments.append(status_attachment(status_fields(status)))
+    status_replaced = False
+
+    for attachment in original.get("attachments") or []:
+        if attachment.get("title") == "선택 현황":
+            new_attachments.append(
+                status_attachment(updated_fields)
+            )
+            status_replaced = True
+        else:
+            new_attachments.append(attachment)
+
+    if not status_replaced:
+        new_attachments.append(
+            status_attachment(updated_fields)
+        )
 
     return pack(
         {
